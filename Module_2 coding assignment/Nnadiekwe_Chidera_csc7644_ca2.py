@@ -19,8 +19,8 @@ INSTRUCTIONS:
 - Follow PEP-8 style guidelines for comments and documentation
 - Test your code using the command line interface
 
-Author: [Your Name Here]
-Date: [Date]
+Author: [Chidera Nnadiekwe]
+Date: [March 29, 2026]
 """
 
 import pickle
