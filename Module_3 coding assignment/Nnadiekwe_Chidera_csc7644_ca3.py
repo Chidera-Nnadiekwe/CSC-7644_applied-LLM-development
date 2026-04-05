@@ -301,11 +301,6 @@ def run_batch(client: OpenAI, manifest_path: str) -> str:
             return ""
         print(f"Batch {batch_id} status: {status.status}, waiting 10s...")
         time.sleep(10)
-    
-    # Debug
-    print(f"Output file ID: {status.output_file_id}")
-    print(f"Error file ID: {status.error_file_id}")
-    print(f"Request counts: {status.request_counts}")
 
     # Step 4: Download results
     output_file_id = status.output_file_id or status.error_file_id
