@@ -1,0 +1,156 @@
+# Module 3 Assignment Instructions
+Most real applications don’t run frontier models locally; instead, they call them over APIs. The difference between a demo and a dependable system often comes down to output structure, error handling, and smart batching. In this assignment, you’ll learn to (1) form well-scoped chat messages, (2) demand machine-readable responses that downstream code can trust, and (3) use the official Batch API for cheaper, high-throughput, non-interactive workloads. These skills directly affect cost, latency, and reliability in production. 
+
+## Assignment Objective:
+1. Build a single Python program that can: 
+    - Send a basic chat request to OpenAI and to OpenRouter (via the OpenAI SDK). 
+    - Request strictly structured outputs using JSON mode and JSON Schema (“struct mode”). 
+    - Prepare and run a small Batch job against /v1/chat/completions, then download and parse the results. 
+    - Expose all of the above through a clean command-line interface (CLI) with modes. 
+    - Follow API key hygiene and print token usage per call. 
+### Instructions 
+1. You will write a single Python file named LastName_FirstName_csc7644_ca3.py, replacing LastName and FirstName with your last/first name, respectively. 
+2. Use Python 3.12 in a fresh virtual environment. Allowed 3rd party libraries: openai and python-dotenv. No other third-party packages. 
+    - Store API keys in a .env file (not in source). Required variables:
+    OPENAI_API_KEY=… 
+    OPENROUTER_API_KEY=… (for OpenRouter tasks)
+    - Your program must implement all functions marked with # STUDENT_COMPLETE in the provided template code. You may add helper functions, but do not rename required ones. 
+    - The CLI must expose the following modes (first positional arg): chat, struct, summarize, batch-prepare, batch-run. 
+    - For modes that call the network, keep the default inputs tiny (provided below) so costs remain minimal. 
+### Detailed Coding Instructions
+1. CLI & Environment 
+    - a. Implement an argparse interface: 
+        - First Positional argument (str): one of chat, struct, summarize, batch-prepare, batch-run. 
+        - --provider (str, default: openai), choices: openai, openrouter. 
+        - --model (optional): default gpt-4o-mini for OpenAI, meta-llama/llama-3.1-405b-instruct for OpenRouter. 
+        - --text (optional input text for struct and summarize). 
+        - --manifest, path for batch JSONL (default: tasks.jsonl). 
+        - --window, completion window for batch (default: 24h). 
+    - b. Load API keys from .env using python-dotenv.  
+2. Provider Clients (OpenAI & OpenRouter)
+    - Implement: 
+        - get_client(provider: str)→returns client 
+            - For OpenAI: instantiate with default base URL and OPENAI_API_KEY. 
+            - For openrouter: instantiate with base_url="https://openrouter.ai/api/v1" and OPENROUTER_API_KEY. 
+            - Return a configured OpenAI SDK client. 
+3. Chat Mode (minimal working call)
+    - Implement: 
+        - run_chat(client, model: str)→returns dict
+        - Behavior: 
+            - Send a short chat with roles: 
+            system: “You are a patient, concise assistant.” 
+            user: “In one sentence, explain what a prompt does in an LLM.”
+            - Set temperature=0.2, top_p=1, max_tokens small (≤128). 
+            - Return a dict with keys ‘content’, ‘prompt_tokens’, ‘completion_tokens’, ‘total_tokens’. 
+            Notes: Use response.usage to populate token counts if available; default to 0 otherwise. 
+4. Structured Outputs (JSON Schema)
+    - Implement: 
+        - extract_invoice_json(client, model: str, text: str) → returns dict  
+            - Use struct mode: response_format={"type":"json_schema", "json_schema": {...}}. 
+            - System message: “Extract only the following fields and return JSON only.” 
+            - Provide a JSON Schema with the following: 
+                - fields:  
+                    - invoice_number (string) 
+                    - invoice_date (YYYY-MM-DD string) 
+                    - vendor (string) 
+                    - total_amount_usd (number). 
+                - Missing fields should be set to null  
+            - Parse the returned content with JSON.loads and returns a Python dict. 
+        - You can test it with the following text: “Invoice #44921 from Acme Co. Date: 2025-08-28. Total: $4,912.”  
+5. Batch Mode
+    - You will implement three functions to perform batch mode. During testing, keep the batch job count small (3 jobs). Implement the following functions 
+        - build_batch_manifest(items: list[dict]) à returns list[dict] 
+            - **Purpose**: create a batch manifest 
+            - **returns** a list of request objects (one per line)  
+            - Use IDs like inv-0001, inv-0002, … 
+        - write_jsonl(rows, path) à returns None  
+            - **Purpose**: Accepts the list of request objects (manifest) generated by build_batch_manifest() and stores them in a JSONL file with one JSON object per line.  
+            - The jsonl file should be stored at the given path 
+            - **returns** None 
+        - run_batch(client, manifest_path: str") à returns None 
+            - **Purpose**: To upload the manifest file generated with write_jsonl() to OpenAI, create the batch job, monitor the batch job status until completion, and write the returned results to a file 
+            - You can use files.create() to upload the manifest to OpenAI 
+            - You can use batches.create() to start the batch job 
+            - You can use batchecs.retrieve() to monitor job status 
+            - Once the job is complete, you can use files.content() to retrieve the results and save them to a file named 'results'. jsonl 
+            - **returns** None 
+### Template Summary
+The autograder will verify that the following functions are implemented correctly. Do not change the function names:
+    - get_client(provider: str) -> OpenAI 
+    - run_chat(client, model: str) -> dict 
+    - extract_invoice_json(client, model: str, text: str) -> dict 
+    - build_batch_manifest(items: list[dict]) -> list[dict] 
+    - write_jsonl(rows, path) -> None 
+    - run_batch(client, manifest_path: str) -> str 
+### Command-Line Examples
+1. Basic chat (OpenAI): python LastName_FirstName_csc7644_ca3.py chat --provider openai 
+2. Basic chat (OpenRouter): python LastName_FirstName_csc7644_ca3.py chat --provider openrouter --model meta-llama/llama-3.1-405b-instruct 
+3. Structured extraction (JSON + struct mode): python LastName_FirstName_csc7644_ca3.py struct --provider openai --text "Invoice #44921 from Acme Co. Date: 2025-08-28. Total $4,912." 
+4. Batch (prepare, then run):
+    - python LastName_FirstName_csc7644_ca3.py batch-prepare --provider openai --manifest tasks.jsonl
+    - python LastName_FirstName_csc7644_ca3.py batch-run --provider openai --manifest tasks.jsonl --window 24h 
+### Detailed Submission Checklist 
+- **Files & Naming** 
+    - I am submitting one file named exactly: LastName_FirstName_csc7644_ca3.py. 
+    - No notebooks or extra files are included. 
+- **Environment & Libraries** 
+    - I developed with Python 3.12 in a clean virtual environment. 
+    - I used only built-in Python modules and the allowed third-party libraries: openai, python-dotenv. 
+    - I did not add any other external packages. 
+- **API Keys & Hygiene** 
+    - I created a .env (not submitted) containing: 
+    OPENAI_API_KEY=... 
+    OPENROUTER_API_KEY=...  
+    - My code loads keys using Python-dotenv and never hard-codes them. 
+    - .env is on my .gitignore (if I used git). 
+- **Required Functions (exact names/signatures)** 
+    - get_client(provider: str) → OpenAI client (OpenAI or OpenRouter base URL as specified). 
+    - run_chat(client, model: str) -> dict (returns content, prompt_tokens, completion_tokens, total_tokens). 
+    - extract_invoice_json(client, model: str, text: str) -> dict (JSON/JSON-Schema mode; parses to dict). 
+    - build_batch_manifest(items: list[dict]) -> list[dict] (one request object per item; unique custom_id like inv-0001). 
+    - write_jsonl(rows, path) -> None (writes one JSON object per line). 
+    - run_batch(client, manifest_path: str) -> str (uploads file, creates batch, polls, saves results. jsonl, returns results path). 
+    - I did not rename or remove any # STUDENT_COMPLETE targets; I may add helpers. 
+- **CLI Modes (first positional arg)** 
+    - chat — minimal working call; uses roles and small max_tokens. 
+    - struct — structured extraction with JSON Schema (sets missing fields to null). 
+    - summarize — (as defined in template) uses provided --text. 
+    - batch-prepare — builds a small manifest (default tasks.jsonl). 
+    - batch-run — submits manifest, monitors until done, saves results. jsonl. 
+    - Common flags implemented: 
+        - --provider {openai,openrouter} (default: openai) 
+        - --model (defaults per provider given in spec) 
+        - --text (for struct / summarize) 
+        - --manifest (default: tasks.jsonl) 
+        - --window (default: 24h) 
+- **Structured Output Requirements** 
+    - My system prompt enforces “JSON only”. 
+    - I use JSON Schema in extract_invoice_json with fields: 
+        - invoice_number: string 
+        - invoice_date: string (YYYY-MM-DD) 
+        - vendor: string 
+        - total_amount_usd: number 
+    - I parse the model response with JSON. loads and returns a Python dict. 
+    - I handle missing fields as null. 
+- **Batch Mode Requirements** 
+    - I create a small demo list (≈approximately 3 items) and build a manifest using build_batch_manifest. 
+    - Each request uses /v1/chat/completions, includes messages, low temperature, and a JSON response. 
+    - I upload the manifest (files.create), create the batch (batches.create), poll (batches.retrieve), and save results (files.content → results.jsonl). 
+    - I join outputs to inputs using each line’s custom_id when reading results (if needed). 
+- **Token Usage & Logging**  
+    - For network calls, I capture and print/return prompt_tokens, completion_tokens, and total_tokens (fallback to 0 if missing). 
+- **Style & Documentation** 
+    - My file adheres to PEP-8 guidelines (line length, naming conventions). 
+    - All public functions have docstrings; non-obvious lines have inline comments. 
+- **Quick Local Sanity Tests** (run before submitting) 
+    - python LastName_FirstName_csc7644_ca3.py chat --provider openai 
+    - python LastName_FirstName_csc7644_ca3.py chat --provider openrouter --model meta-llama/llama-3.1-405b-instruct 
+    - python LastName_FirstName_csc7644_ca3.py struct --provider openai --text "Invoice #44921 from Acme Co. Date: 2025-08-28. Total $4,912." 
+    - python LastName_FirstName_csc7644_ca3.py batch-prepare --provider openai --manifest tasks.jsonl 
+    - python LastName_FirstName_csc7644_ca3.py batch-run --provider openai --manifest tasks.jsonl --window 24h 
+    - I confirmed that no secrets are printed, and outputs are small and valid. 
+- **Final Steps** 
+    - I verified the program runs end-to-end without exceptions. 
+    - I’m submitting only LastName_FirstName_csc7644_ca3.py to Moodle. 
+**Submission Guidelines**
+Submit your single Python file (LastName_FirstName_csc7644_ca3.py) to the Moodle submission link. Do not change required function or mode names. Follow PEP-8 and comment your code as you would for production (docstrings + inline comments). 
